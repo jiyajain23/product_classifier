@@ -2,103 +2,150 @@ import streamlit as st
 import tensorflow as tf
 from PIL import Image
 import numpy as np
+import pandas as pd
+import zipfile
+import io
 
-# Page config
-st.set_page_config(page_title="Shopee Classifier", page_icon="🛍️", layout="centered")
+# ------------------ PAGE CONFIG ------------------
+st.set_page_config(page_title="Shopee Classifier", page_icon="🛍️")
 
-# Custom CSS for styling
+# ------------------ STYLING ------------------
 st.markdown("""
-    <style>
-        .main {
-            background-color: #f7f9fc;
-        }
-        .title {
-            font-size: 36px;
-            font-weight: bold;
-            text-align: center;
-            color: #ff4b4b;
-        }
-        .subtitle {
-            text-align: center;
-            font-size: 16px;
-            color: gray;
-        }
-        .card {
-            padding: 20px;
-            border-radius: 15px;
-            background-color: white;
-            box-shadow: 0px 4px 15px rgba(0,0,0,0.1);
-            text-align: center;
-        }
-    </style>
+<style>
+.title {
+    text-align:center;
+    font-size:36px;
+    font-weight:bold;
+    color:#ff4b4b;
+}
+.subtitle {
+    text-align:center;
+    color:gray;
+    margin-bottom:20px;
+}
+.card {
+    padding:10px;
+    border-radius:12px;
+    background:white;
+    box-shadow:0px 3px 10px rgba(0,0,0,0.1);
+    text-align:center;
+}
+</style>
 """, unsafe_allow_html=True)
 
-# Load model
+# ------------------ MODEL ------------------
 @st.cache_resource
-def load_my_model():
+def load_model():
     return tf.keras.models.load_model('jiya_shopee_final_v2.keras')
 
-model = load_my_model()
+model = load_model()
 
-# Categories
+# ------------------ LABELS ------------------
 category_names = {
-    "00": "Dresses", "01": "Long Dresses", "02":"Summer Clothes",
-    "03":"Winter Clothes","04":"Jeans","05":"Rings","06":"Earrings",
-    "07":"Headwear","08":"Purses","09":"Handbags","10":"Mobile Covers",
-    "11":"Mobile Phones","12":"Watches","13":"Baby Sippers",
-    "14":"Cookers","15":"Coffees","16":"Shoes/Slippers","17":"Heels",
-    "18":"Refrigerators","19":"Pendrive","20":"Chair/Stool",
-    "21":"Racket","22":"Helmets","23":"Gloves","24":"Wrist Watches",
-    "25":"Belts","26":"Earphones/HeadPhones","27":"Toys","28":"Jacket",
-    "29":"Pants","30":"Shoes","31":"Snack","32":"Masks",
-    "33":"Sanitizers","34":"Skin Products","35":"Perfume",
-    "36":"Bathroom supplies","37":"Laptop","38":"Utensils",
+    "00": "Dresses","01": "Long Dresses","02":"Summer Clothes","03":"Winter Clothes",
+    "04":"Jeans","05":"Rings","06":"Earrings","07":"Headwear","08":"Purses",
+    "09":"Handbags","10":"Mobile Covers","11":"Mobile Phones","12":"Watches",
+    "13":"Baby Sippers","14":"Cookers","15":"Coffees","16":"Shoes/Slippers",
+    "17":"Heels","18":"Refrigerators","19":"Pendrive","20":"Chair/Stool",
+    "21":"Racket","22":"Helmets","23":"Gloves","24":"Wrist Watches","25":"Belts",
+    "26":"Earphones/HeadPhones","27":"Toys","28":"Jacket","29":"Pants",
+    "30":"Shoes","31":"Snack","32":"Masks","33":"Sanitizers","34":"Skin Products",
+    "35":"Perfume","36":"Bathroom supplies","37":"Laptop","38":"Utensils",
     "39":"Home Decor","40":"Showers","41":"Furniture"
 }
 
-# Title
+# ------------------ HEADER ------------------
 st.markdown('<div class="title">🛍️ Shopee Product Classifier</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">Upload an image and let AI classify it instantly</div>', unsafe_allow_html=True)
-st.write("")
+st.markdown('<div class="subtitle">Upload images or a ZIP folder</div>', unsafe_allow_html=True)
 
-# Sidebar
-st.sidebar.header("⚙️ Settings")
-show_confidence = st.sidebar.checkbox("Show Confidence Score", value=True)
+# ------------------ UPLOAD OPTIONS ------------------
+uploaded_files = st.file_uploader("📁 Upload Images", type=["jpg","jpeg","png"], accept_multiple_files=True)
+zip_file = st.file_uploader("🗜️ Or Upload ZIP Folder", type=["zip"])
 
-# Upload
-uploaded_file = st.file_uploader("📤 Upload a product image", type=["jpg", "jpeg", "png"])
+images = []
 
-if uploaded_file is not None:
-    image = Image.open(uploaded_file)
+# ------------------ HANDLE ZIP ------------------
+if zip_file:
+    with zipfile.ZipFile(zip_file, "r") as z:
+        for file in z.namelist():
+            if file.endswith(("jpg","jpeg","png")):
+                img = Image.open(io.BytesIO(z.read(file)))
+                images.append((file, img))
 
-    col1, col2 = st.columns(2)
+# ------------------ HANDLE NORMAL FILES ------------------
+if uploaded_files:
+    for f in uploaded_files:
+        img = Image.open(f)
+        images.append((f.name, img))
 
-    with col1:
-        st.image(image, caption="Uploaded Image", use_column_width=True)
+# ------------------ PREDICTION ------------------
+if images:
+    if st.button("🚀 Classify All"):
+        results = []
+        progress = st.progress(0)
 
-    with col2:
-        st.markdown("### 🧠 Prediction Panel")
+        cols = st.columns(3)
 
-        if st.button("🚀 Classify"):
-            with st.spinner("Analyzing image..."):
-                # Preprocess
-                img = image.resize((224, 224))
-                img_array = np.array(img) / 255.0
-                img_array = np.expand_dims(img_array, axis=0)
+        for i, (name, image) in enumerate(images):
+            # preprocess
+            img = image.resize((224,224))
+            arr = np.array(img)/255.0
+            arr = np.expand_dims(arr, axis=0)
 
-                preds = model.predict(img_array)
-                class_idx = np.argmax(preds[0])
-                confidence = np.max(preds[0]) * 100
+            preds = model.predict(arr, verbose=0)[0]
 
-                prediction_id = str(class_idx).zfill(2)
-                name = category_names.get(prediction_id, f"Category ID: {prediction_id}")
+            # TOP 3
+            top3_idx = preds.argsort()[-3:][::-1]
 
-            # Result Card
-            st.markdown('<div class="card">', unsafe_allow_html=True)
-            st.success(f"🛒 {name}")
+            top_preds = []
+            for idx in top3_idx:
+                pid = str(idx).zfill(2)
+                label = category_names.get(pid, pid)
+                conf = preds[idx]*100
+                top_preds.append((label, conf))
 
-            if show_confidence:
-                st.progress(int(confidence))
-                st.write(f"Confidence: **{confidence:.2f}%**")
+            results.append({
+                "image": name,
+                "top1": top_preds[0][0],
+                "conf1": top_preds[0][1],
+                "top2": top_preds[1][0],
+                "conf2": top_preds[1][1],
+                "top3": top_preds[2][0],
+                "conf3": top_preds[2][1]
+            })
 
-            st.markdown('</div>', unsafe_allow_html=True)
+            # UI DISPLAY
+            with cols[i % 3]:
+                st.image(image, use_column_width=True)
+
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+
+                for label, conf in top_preds:
+                    st.write(f"**{label}** - {conf:.1f}%")
+                    st.progress(int(conf))
+
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            progress.progress((i+1)/len(images))
+
+        # ------------------ RESULTS TABLE ------------------
+        df = pd.DataFrame(results)
+
+        st.write("### 📊 Results Table")
+        st.dataframe(df)
+
+        # ------------------ SORT OPTION ------------------
+        sort = st.selectbox("Sort by", ["None","Top Prediction"])
+
+        if sort == "Top Prediction":
+            df = df.sort_values("top1")
+            st.dataframe(df)
+
+        # ------------------ DOWNLOAD ------------------
+        csv = df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            "📥 Download CSV",
+            csv,
+            "predictions.csv",
+            "text/csv"
+        )

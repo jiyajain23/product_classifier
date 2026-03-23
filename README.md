@@ -1,6 +1,7 @@
 # 🛍️ Product Image Classification
 
 An end-to-end Computer Vision pipeline to classify over **100,000 marketplace images** into 42 distinct categories. This project transitions from raw data exploration to a live-deployed web application.
+### Live demo: https://jiya-image-classifier.streamlit.app/
 
 ### 🛠️ Tech Stack
 * **Language:** Python
